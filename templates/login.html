@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}로그인 / 회원가입 - OpenChatting{% endblock %}
+
+{% block content %}
+<div class="auth-hero-bg rounded-4 d-flex align-items-center justify-content-center flex-grow-1 p-3 p-md-4">
+    <div class="card border-0 shadow-lg overflow-hidden rounded-4 w-100" style="max-width: 960px;">
+        <div class="row g-0">
+            <!-- 좌측: 사용자 지정 로그인/회원가입 대표 이미지 영역 -->
+            <div class="col-lg-6 position-relative d-flex flex-column justify-content-end text-white p-0">
+                <img src="{{ url_for('static', filename='img/login_bg.jpg') }}"
+                     alt="OpenChatting Welcome"
+                     class="w-100 h-100 object-fit-cover"
+                     style="min-height: 280px;">
+                <div class="position-absolute bottom-0 start-0 end-0 p-4"
+                     style="background: linear-gradient(to top, rgba(15,23,42,0.85), rgba(15,23,42,0.05));">
+                    <span class="badge bg-warning text-dark mb-2">실시간 오픈채팅 플랫폼</span>
+                    <h2 class="h4 fw-bold mb-1">OpenChatting에 오신 것을 환영합니다</h2>
+                    <p class="small mb-0 opacity-75">
+                        전체/1:1 메시지 · 공지사항 관리 · 파일 송수신 · 특정 Window 실시간 화면 공유
+                    </p>
+                </div>
+            </div>
+
+            <!-- 우측: 로그인 및 회원가입 폼 영역 -->
+            <div class="col-lg-6 bg-white p-4 p-md-5 d-flex flex-column justify-content-center">
+                <div class="mb-3">
+                    <h1 class="h4 fw-bold mb-1">로그인 / 회원가입</h1>
+                    <p class="text-secondary small mb-0">계정 정보를 입력하여 오픈채팅방에 접속하세요.</p>
+                </div>
+
+                {% if existing_ip_session %}
+                <div class="alert alert-warning small py-2 px-3 mb-3">
+                    <div class="fw-bold mb-1">🔒 현재 IP({{ client_ip }}) 접속 상태 안내</div>
+                    <p class="mb-1">
+                        동일 IP에서는 <strong>1개의 User</strong>만 접속할 수 있습니다.<br>
+                        현재 <strong>{{ existing_ip_session.user_name }} ({{ existing_ip_session.user_id }})</strong> 계정이 접속 중입니다.
+                    </p>
+                    <details class="mt-1">
+                        <summary class="fw-semibold" style="cursor: pointer;">이전 창을 닫아 로그아웃하지 못한 경우 (세션 해제)</summary>
+                        <form action="{{ url_for('release_ip') }}" method="POST" class="d-flex flex-column gap-2 mt-2">
+                            <input type="text" class="form-control form-control-sm" name="user_id" value="{{ existing_ip_session.user_id }}" placeholder="점유 중인 User ID" required>
+                            <input type="password" class="form-control form-control-sm" name="password" placeholder="해당 계정의 Password 입력" required>
+                            <button type="submit" class="btn btn-warning btn-sm fw-semibold">기존 IP 세션 해제</button>
+                        </form>
+                    </details>
+                </div>
+                {% endif %}
+
+                <!-- 탭 전환 버튼 -->
+                <ul class="nav nav-pills nav-fill bg-light p-1 rounded-3 mb-3 border">
+                    <li class="nav-item">
+                        <button type="button" class="nav-link active fw-semibold py-2" id="tab-login-btn" onclick="switchAuthTab('login')">
+                            로그인 (Login)
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button type="button" class="nav-link fw-semibold py-2" id="tab-register-btn" onclick="switchAuthTab('register')">
+                            회원가입 (Sign Up)
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- 로그인 폼 -->
+                <form id="login-form" action="{{ url_for('login') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="login_user_id" class="form-label small fw-semibold">User ID</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="login_user_id"
+                            name="user_id"
+                            value="{{ saved_user_id }}"
+                            placeholder="아이디를 입력하세요"
+                            required
+                            autocomplete="username"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="login_password" class="form-label small fw-semibold">Password</label>
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="login_password"
+                            name="password"
+                            placeholder="비밀번호를 입력하세요"
+                            required
+                            autocomplete="current-password"
+                        >
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="remember_id"
+                            name="remember_id"
+                            {% if remember_id %}checked{% endif %}
+                        >
+                        <label class="form-check-label small" for="remember_id">
+                            User ID 저장 (다음 접속 시 자동 입력)
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">로그인</button>
+                </form>
+
+                <!-- 회원가입 폼 -->
+                <form id="register-form" action="{{ url_for('register') }}" method="POST" class="hidden">
+                    <div class="mb-3">
+                        <label for="reg_user_id" class="form-label small fw-semibold">User ID</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="reg_user_id"
+                            name="user_id"
+                            placeholder="사용할 User ID 입력 (2~50자)"
+                            minlength="2"
+                            maxlength="50"
+                            required
+                            autocomplete="username"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reg_name" class="form-label small fw-semibold">이름 (Name)</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="reg_name"
+                            name="name"
+                            placeholder="실명 또는 닉네임 입력"
+                            maxlength="100"
+                            required
+                            autocomplete="name"
+                        >
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="reg_password" class="form-label small fw-semibold">Password</label>
+                        <input
+                            type="password"
+                            class="form-control"
+                            id="reg_password"
+                            name="password"
+                            placeholder="비밀번호 입력"
+                            required
+                            autocomplete="new-password"
+                        >
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100 py-2 fw-semibold">회원가입 완료</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function switchAuthTab(mode) {
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const loginBtn = document.getElementById('tab-login-btn');
+        const registerBtn = document.getElementById('tab-register-btn');
+
+        if (mode === 'register') {
+            loginForm.classList.add('hidden');
+            registerForm.classList.remove('hidden');
+            loginBtn.classList.remove('active');
+            registerBtn.classList.add('active');
+        } else {
+            registerForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+            registerBtn.classList.remove('active');
+            loginBtn.classList.add('active');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('tab') === 'register') {
+            switchAuthTab('register');
+        }
+
+        const loginIdInput = document.getElementById('login_user_id');
+        const rememberCheckbox = document.getElementById('remember_id');
+        const storedUserId = localStorage.getItem('openchat_saved_user_id');
+
+        if (!loginIdInput.value && storedUserId) {
+            loginIdInput.value = storedUserId;
+            rememberCheckbox.checked = true;
+        }
+
+        document.getElementById('login-form').addEventListener('submit', () => {
+            if (rememberCheckbox.checked && loginIdInput.value.trim()) {
+                localStorage.setItem('openchat_saved_user_id', loginIdInput.value.trim());
+            } else {
+                localStorage.removeItem('openchat_saved_user_id');
+            }
+        });
+    });
+</script>
+{% endblock %}

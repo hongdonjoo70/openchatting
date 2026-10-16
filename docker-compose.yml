@@ -1,0 +1,14 @@
+services:
+  openchatting:
+    build: .
+    container_name: openchatting-app
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+    environment:
+      - PORT=4000
+      - SECRET_KEY=openchatting-secret-key-2026
+    restart: unless-stopped
+

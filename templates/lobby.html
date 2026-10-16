@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}오픈채팅방 목록 - OpenChatting{% endblock %}
+
+{% block content %}
+<div class="container py-2">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+        <div>
+            <h2 class="h4 fw-bold mb-1">오픈채팅방 로비</h2>
+            <p class="text-secondary small mb-0">원하는 채팅방에 입장하거나 새로운 오픈채팅방을 개설해보세요.</p>
+        </div>
+        <button type="button" class="btn btn-primary fw-semibold" onclick="document.getElementById('create-room-modal').classList.remove('hidden')">
+            ➕ 새 오픈채팅방 개설
+        </button>
+    </div>
+
+    <div class="row g-3">
+        {% for item in room_list %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card h-100 shadow-sm border-0 rounded-3">
+                <div class="card-body d-flex flex-column justify-content-between gap-3">
+                    <div>
+                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                            <h3 class="h5 fw-bold mb-0 text-truncate">{{ item.room.title }}</h3>
+                            <span class="badge rounded-pill text-bg-success">👥 {{ item.participant_count }}명 접속 중</span>
+                        </div>
+                        <p class="text-secondary small mb-2">{{ item.room.description or "설명이 없는 오픈채팅방입니다." }}</p>
+
+                        {% if item.active_notice %}
+                        <div class="alert alert-info py-2 px-3 small mb-0">
+                            📢 <strong>공지:</strong> {{ item.active_notice }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <div class="d-flex justify-content-between text-secondary small mb-2">
+                            <span>개설자: <strong>{{ item.room.creator_name }}</strong> ({{ item.room.creator_id }})</span>
+                            <span>누적 메시지: {{ item.msg_count }}건</span>
+                        </div>
+                        <a href="{{ url_for('enter_room', room_id=item.room.id) }}" class="btn btn-primary w-100 fw-semibold">
+                            채팅방 입장하기 →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="card border-0 shadow-sm p-5 text-center text-secondary">
+                개설된 오픈채팅방이 없습니다. 첫 번째 채팅방을 만들어보세요!
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 새 채팅방 개설 모달 -->
+<div id="create-room-modal" class="modal-backdrop-custom hidden">
+    <div class="card shadow-lg border-0 rounded-4 w-100" style="max-width: 520px;">
+        <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
+            <h3 class="h6 fw-bold mb-0">➕ 새 오픈채팅방 개설</h3>
+            <button type="button" class="btn-close" onclick="document.getElementById('create-room-modal').classList.add('hidden')"></button>
+        </div>
+        <form action="{{ url_for('create_room') }}" method="POST" class="card-body p-4">
+            <div class="mb-3">
+                <label for="room_title" class="form-label small fw-semibold">채팅방 이름 *</label>
+                <input type="text" class="form-control" id="room_title" name="title" placeholder="예: 프로젝트 개발 오픈채팅방" required maxlength="120">
+            </div>
+            <div class="mb-3">
+                <label for="room_desc" class="form-label small fw-semibold">채팅방 소개</label>
+                <input type="text" class="form-control" id="room_desc" name="description" placeholder="채팅방 주제나 안내 문구를 입력하세요" maxlength="300">
+            </div>
+            <div class="mb-3">
+                <label for="initial_notice" class="form-label small fw-semibold">초기 공지사항 (선택)</label>
+                <textarea class="form-control" id="initial_notice" name="initial_notice" rows="3" placeholder="입장 시 상단에 고정할 공지사항을 입력하세요"></textarea>
+            </div>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('create-room-modal').classList.add('hidden')">취소</button>
+                <button type="submit" class="btn btn-primary fw-semibold">채팅방 개설 및 입장</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

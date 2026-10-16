@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenChatting - 실시간 오픈채팅{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm sticky-top py-2">
+        <div class="container-fluid px-3 px-lg-4">
+            <a href="{{ url_for('index') }}" class="navbar-brand fw-bold d-flex align-items-center gap-2 mb-0">
+                <span>💬</span>
+                <span>OpenChatting</span>
+                <span class="badge rounded-pill text-bg-primary fw-normal">Port 4000</span>
+            </a>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                {% if session.get('user_id') %}
+                    <span class="badge rounded-pill text-bg-light border text-dark py-2 px-3" title="동일 IP에서는 1명의 사용자만 접속 가능합니다">
+                        🌐 접속 IP: <strong>{{ client_ip or request.remote_addr }}</strong> (1 IP 1 User)
+                    </span>
+                    <span class="badge rounded-pill text-bg-light border text-dark py-2 px-3">
+                        👤 <strong>{{ session.get('user_name') }}</strong> ({{ session.get('user_id') }})
+                    </span>
+                    <a href="{{ url_for('lobby') }}" class="btn btn-outline-secondary btn-sm">채팅방 목록</a>
+                    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">로그아웃</a>
+                {% else %}
+                    <span class="badge rounded-pill text-bg-light border text-dark py-2 px-3">
+                        🌐 내 IP: <strong>{{ client_ip or request.remote_addr }}</strong>
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container-fluid px-3 px-lg-4 py-3 flex-grow-1 d-flex flex-column">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-3">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show py-2 mb-2 shadow-sm" role="alert">
+                            <span>{{ message }}</span>
+                            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Close" onclick="this.parentElement.remove()"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

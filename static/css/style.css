@@ -1,0 +1,85 @@
+/* Bootstrap 5 보조 커스텀 스타일 (경량화 버전) */
+.hidden { display: none !important; }
+
+.auth-hero-bg {
+    background: linear-gradient(rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.55)),
+                url("../img/login_bg.jpg") center / cover no-repeat;
+}
+
+.chat-layout {
+    height: calc(100vh - 88px);
+    min-height: 540px;
+}
+
+.notice-banner { background: #fefce8; }
+.notice-banner.notice-empty { background: #f8fafc; color: #64748b; }
+
+.screen-share-body {
+    height: 250px;
+    background: #020617;
+}
+.screen-share-body video,
+.screen-share-body img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.live-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+}
+
+.message-list {
+    overflow-y: auto;
+    background: #f8fafc;
+}
+
+.msg-bubble {
+    max-width: 72%;
+    background: #ffffff;
+}
+.msg-mine .msg-bubble {
+    background: #dbeafe;
+    border-color: #bfdbfe !important;
+}
+.msg-whisper .msg-bubble {
+    background: #faf5ff;
+    border-color: #d8b4fe !important;
+}
+.whisper-badge {
+    background: #f3e8ff;
+    color: #7e22ce;
+    border: 1px solid #d8b4fe;
+}
+.msg-text {
+    font-size: 0.92rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.modal-backdrop-custom {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1055;
+    padding: 1rem;
+}
+
+@media (max-width: 991.98px) {
+    .chat-layout { height: auto; }
+    .message-list { min-height: 360px; max-height: 60vh; }
+}

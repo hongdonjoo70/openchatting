@@ -2,6 +2,8 @@ const chatApp = document.getElementById("chat-app");
 const ROOM_ID = parseInt(chatApp.dataset.roomId, 10);
 const CURRENT_USER_ID = chatApp.dataset.userId;
 const CURRENT_USER_NAME = chatApp.dataset.userName;
+const MAX_UPLOAD_BYTES = parseInt(chatApp.dataset.maxUploadBytes || "52428800", 10);
+const MAX_UPLOAD_LABEL = chatApp.dataset.maxUploadLabel || "50MB";
 
 const socket = io();
 
@@ -10,6 +12,11 @@ let localScreenStream = null;
 let screenFrameInterval = null;
 let isSharingScreen = false;
 let cachedDbData = { notices: [], messages: [] };
+
+let isPageUnloading = false;
+window.addEventListener("beforeunload", () => {
+    isPageUnloading = true;
+});
 
 function scrollToBottom() {
     const list = document.getElementById("message-list");
@@ -21,9 +28,21 @@ socket.on("connect", () => {
     socket.emit("join_chat_room", { room_id: ROOM_ID });
 });
 
+socket.on("disconnect", (reason) => {
+    if (!isPageUnloading && reason !== "io client disconnect") {
+        window.location.href = "/logout";
+    }
+});
+
 socket.on("auth_error", (data) => {
     alert(data.message || "세션이 만료되었거나 동일 IP에서 다른 계정이 접속 중입니다.");
-    window.location.href = "/login";
+    window.location.href = "/logout";
+});
+
+socket.on("room_full_error", (data) => {
+    alert(data.message || "채팅방 최대 참여 인원(6명)이 초과되어 입장할 수 없습니다.");
+    isPageUnloading = true;
+    window.location.href = "/lobby";
 });
 
 socket.on("user_list_update", (data) => {
@@ -31,7 +50,8 @@ socket.on("user_list_update", (data) => {
     connectedUsers = data.users || [];
 
     const countBadge = document.getElementById("participant-count-badge");
-    if (countBadge) countBadge.textContent = `${data.count}명`;
+    const maxUsers = data.max_users || 6;
+    if (countBadge) countBadge.textContent = `${data.count} / ${maxUsers}명`;
 
     const listEl = document.getElementById("participant-list");
     const recipientSelect = document.getElementById("recipient-select");
@@ -128,18 +148,27 @@ function onRecipientChange() {
         const selectedOpt = recipientSelect.options[recipientSelect.selectedIndex];
         const targetName = selectedOpt.dataset.userName || recipientSelect.value;
         indicator.classList.remove("hidden");
-        msgInput.placeholder = `🔒 [${targetName}(${recipientSelect.value})]님에게만 보낼 메시지를 입력하세요...`;
+        msgInput.placeholder = `🔒 [${targetName}(${recipientSelect.value})]님에게만 보낼 메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)`;
     } else {
         indicator.classList.add("hidden");
-        msgInput.placeholder = "메시지를 입력하세요... (Enter로 전송)";
+        msgInput.placeholder = "메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)";
+    }
+}
+
+function handleMessageKeydown(e) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        e.preventDefault();
+        sendChatMessage(e);
     }
 }
 
 function sendChatMessage(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const input = document.getElementById("message-input");
-    const content = input.value.trim();
-    if (!content) return;
+    const rawValue = input.value.replace(/\r\n/g, "\n");
+    if (!rawValue.trim()) return;
+
+    const content = rawValue.replace(/^\n+|\n+$/g, "");
 
     const recipientSelect = document.getElementById("recipient-select");
     const targetUserId = recipientSelect.value || null;
@@ -159,6 +188,28 @@ function sendChatMessage(e) {
     input.value = "";
     input.focus();
 }
+
+function clearCurrentRoomChat() {
+    if (confirm("현재 채팅방의 모든 대화 내용과 공유된 파일을 초기화하시겠습니까?")) {
+        socket.emit("clear_room_chat", { room_id: ROOM_ID });
+    }
+}
+
+socket.on("chat_cleared", (data) => {
+    if (data.room_id !== ROOM_ID) return;
+    const list = document.getElementById("message-list");
+    if (list) {
+        list.innerHTML = "";
+    }
+    const fileList = document.getElementById("room-file-list");
+    if (fileList) {
+        fileList.innerHTML = `<li id="empty-file-item" class="text-secondary small p-2">아직 업로드된 파일이 없습니다.</li>`;
+    }
+    if (data.sys_msg) {
+        appendMessageToDOM(data.sys_msg);
+    }
+    scrollToBottom();
+});
 
 socket.on("new_message", (msg) => {
     if (msg.room_id !== ROOM_ID) return;
@@ -236,6 +287,12 @@ async function uploadSelectedFile() {
     if (!fileInput.files || fileInput.files.length === 0) return;
 
     const file = fileInput.files[0];
+    if (file.size > MAX_UPLOAD_BYTES) {
+        alert(`File 크기가 너무 큽니다. 최대 upload가능한 File 크기는 ${MAX_UPLOAD_LABEL} 입니다.`);
+        fileInput.value = "";
+        return;
+    }
+
     const recipientSelect = document.getElementById("recipient-select");
     const targetUserId = recipientSelect.value || "";
     let targetUserName = "";
@@ -254,6 +311,10 @@ async function uploadSelectedFile() {
             method: "POST",
             body: formData,
         });
+        if (res.status === 413) {
+            alert(`File 크기가 너무 큽니다. 최대 upload가능한 File 크기는 ${MAX_UPLOAD_LABEL} 입니다.`);
+            return;
+        }
         const data = await res.json();
         if (!data.ok) alert(data.error || "파일 업로드에 실패했습니다.");
     } catch (err) {
@@ -315,6 +376,7 @@ socket.on("notice_updated", (data) => {
     const banner = document.getElementById("notice-banner");
     const textEl = document.getElementById("notice-content-text");
     const delBtn = document.getElementById("btn-delete-active-notice");
+    const historyList = document.getElementById("notice-history-list");
 
     if (data.notice) {
         banner.classList.remove("notice-empty");
@@ -323,10 +385,25 @@ socket.on("notice_updated", (data) => {
             ${escapeHtml(data.notice.content)}
             <small class="text-secondary ms-1">(작성: ${escapeHtml(data.notice.author_name)} · ${escapeHtml(data.notice.created_at)})</small>
         `;
+        if (historyList) {
+            historyList.innerHTML = `
+                <li class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded-2 small" id="notice-item-${data.notice.id}">
+                    <div>
+                        <strong>${escapeHtml(data.notice.content)}</strong>
+                        <span class="badge text-bg-success ms-1">현재 공지</span>
+                        <div class="text-secondary">${escapeHtml(data.notice.author_name)} (${escapeHtml(data.notice.author_id)}) · ${escapeHtml(data.notice.created_at)}</div>
+                    </div>
+                    <button type="button" class="btn btn-danger btn-sm py-0 px-2" onclick="deleteNoticeById(${data.notice.id})">삭제</button>
+                </li>
+            `;
+        }
     } else {
         banner.classList.add("notice-empty");
         delBtn.classList.add("hidden");
         textEl.textContent = "등록된 공지사항이 없습니다. 우측 버튼을 눌러 공지사항을 설정하세요.";
+        if (historyList) {
+            historyList.innerHTML = `<li class="text-secondary small">저장된 공지사항이 없습니다.</li>`;
+        }
     }
 });
 
@@ -363,8 +440,8 @@ async function startWindowScreenShare() {
             video: {
                 displaySurface: "window",
                 cursor: "always",
-                width: { ideal: 1280, max: 1600 },
-                height: { ideal: 720, max: 900 },
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
                 frameRate: { ideal: 10, max: 15 },
             },
             audio: false,
@@ -409,13 +486,13 @@ async function startWindowScreenShare() {
         screenFrameInterval = setInterval(() => {
             if (!isSharingScreen || !localVideo.videoWidth) return;
 
-            const maxW = 960;
+            const maxW = 1280;
             const scale = Math.min(1, maxW / localVideo.videoWidth);
             canvas.width = Math.round(localVideo.videoWidth * scale);
             canvas.height = Math.round(localVideo.videoHeight * scale);
 
             ctx.drawImage(localVideo, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL("image/jpeg", 0.65);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
 
             socket.emit("screen_frame", { room_id: ROOM_ID, frame: dataUrl });
         }, 200);

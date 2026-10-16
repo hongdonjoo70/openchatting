@@ -5,4 +5,5 @@ simple-websocket==1.0.0
 Werkzeug==3.0.3
 python-socketio==5.11.2
 python-engineio==4.9.0
+python-dotenv==1.0.1
 

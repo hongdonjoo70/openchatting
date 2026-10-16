@@ -1,16 +1,29 @@
 {% extends "base.html" %}
 {% block title %}오픈채팅방 목록 - OpenChatting{% endblock %}
 
+{% block head %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="container py-2">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
         <div>
-            <h2 class="h4 fw-bold mb-1">오픈채팅방 로비</h2>
-            <p class="text-secondary small mb-0">원하는 채팅방에 입장하거나 새로운 오픈채팅방을 개설해보세요.</p>
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="h4 fw-bold mb-0">오픈채팅방 로비</h2>
+                <span class="badge rounded-pill text-bg-secondary">채팅방 {{ room_list|length }} / {{ max_rooms or 6 }}개</span>
+            </div>
+            <p class="text-secondary small mb-0 mt-1">채팅방은 최대 {{ max_rooms or 6 }}개까지 개설 가능하며, 채팅방별 최대 참여 인원은 {{ max_participants or 6 }}명입니다.</p>
         </div>
-        <button type="button" class="btn btn-primary fw-semibold" onclick="document.getElementById('create-room-modal').classList.remove('hidden')">
-            ➕ 새 오픈채팅방 개설
+        {% if (room_list|length) >= (max_rooms or 6) %}
+        <button type="button" class="btn btn-secondary fw-semibold" onclick="alert('채팅방은 최대 {{ max_rooms or 6 }}개까지만 개설할 수 있습니다.')">
+            🔒 채팅방 개설 마감 ({{ room_list|length }}/{{ max_rooms or 6 }})
         </button>
+        {% else %}
+        <button type="button" class="btn btn-primary fw-semibold" onclick="document.getElementById('create-room-modal').classList.remove('hidden')">
+            ➕ 새 오픈채팅방 개설 ({{ room_list|length }}/{{ max_rooms or 6 }})
+        </button>
+        {% endif %}
     </div>
 
     <div class="row g-3">
@@ -21,7 +34,9 @@
                     <div>
                         <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
                             <h3 class="h5 fw-bold mb-0 text-truncate">{{ item.room.title }}</h3>
-                            <span class="badge rounded-pill text-bg-success">👥 {{ item.participant_count }}명 접속 중</span>
+                            <span class="badge rounded-pill {% if item.is_full %}text-bg-danger{% else %}text-bg-success{% endif %}">
+                                👥 {{ item.participant_count }} / {{ max_participants or 6 }}명 접속 중
+                            </span>
                         </div>
                         <p class="text-secondary small mb-2">{{ item.room.description or "설명이 없는 오픈채팅방입니다." }}</p>
 
@@ -37,9 +52,15 @@
                             <span>개설자: <strong>{{ item.room.creator_name }}</strong> ({{ item.room.creator_id }})</span>
                             <span>누적 메시지: {{ item.msg_count }}건</span>
                         </div>
+                        {% if item.is_full and session.get('user_name') not in item.participants %}
+                        <button type="button" class="btn btn-secondary w-100 fw-semibold" disabled>
+                            정원 초과 ({{ item.participant_count }}/{{ max_participants or 6 }}명)
+                        </button>
+                        {% else %}
                         <a href="{{ url_for('enter_room', room_id=item.room.id) }}" class="btn btn-primary w-100 fw-semibold">
                             채팅방 입장하기 →
                         </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -72,7 +93,7 @@
             </div>
             <div class="mb-3">
                 <label for="initial_notice" class="form-label small fw-semibold">초기 공지사항 (선택)</label>
-                <textarea class="form-control" id="initial_notice" name="initial_notice" rows="3" placeholder="입장 시 상단에 고정할 공지사항을 입력하세요"></textarea>
+                <textarea class="form-control" id="initial_notice" rows="3" name="initial_notice" placeholder="입장 시 상단에 고정할 공지사항을 입력하세요"></textarea>
             </div>
             <div class="d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('create-room-modal').classList.add('hidden')">취소</button>
@@ -81,4 +102,30 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const lobbySocket = io();
+    let isLobbyUnloading = false;
+
+    window.addEventListener("beforeunload", () => {
+        isLobbyUnloading = true;
+    });
+
+    lobbySocket.on("connect", () => {
+        lobbySocket.emit("join_lobby");
+    });
+
+    lobbySocket.on("disconnect", (reason) => {
+        if (!isLobbyUnloading && reason !== "io client disconnect") {
+            window.location.href = "/logout";
+        }
+    });
+
+    lobbySocket.on("auth_error", (data) => {
+        alert(data.message || "접속이 해제되어 로그아웃되었습니다.");
+        window.location.href = "/logout";
+    });
+</script>
 {% endblock %}

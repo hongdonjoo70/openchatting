@@ -10,11 +10,13 @@
      id="chat-app"
      data-room-id="{{ room.id }}"
      data-user-id="{{ session.get('user_id') }}"
-     data-user-name="{{ session.get('user_name') }}">
+     data-user-name="{{ session.get('user_name') }}"
+     data-max-upload-bytes="{{ max_upload_bytes or 52428800 }}"
+     data-max-upload-label="{{ max_upload_label or '50MB' }}">
 
     <!-- 좌측/중앙 메인 채팅 및 화면 공유 영역 -->
     <div class="col-lg-9 d-flex flex-column h-100">
-        <section class="card border-0 shadow-sm rounded-3 d-flex flex-column flex-grow-1 overflow-hidden">
+        <section class="card border-0 shadow-sm rounded-3 d-flex flex-column flex-grow-1 overflow-hidden position-relative">
             <!-- 채팅방 상단 헤더 -->
             <div class="card-header bg-white py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="d-flex align-items-center gap-2">
@@ -29,6 +31,9 @@
                     </button>
                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openDbHistoryModal()">
                         🗄️ DB 저장내역 보기
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearCurrentRoomChat()">
+                        🧹 대화 내용 초기화
                     </button>
                     <button type="button" id="btn-start-share" class="btn btn-primary btn-sm" onclick="openScreenShareModal()">
                         🖥️ 특정 Window 화면 공유
@@ -63,9 +68,9 @@
                 </div>
             </div>
 
-            <!-- 실시간 특정 Window 화면 공유 뷰어 영역 -->
-            <div id="screen-share-panel" class="bg-dark text-white border-bottom hidden">
-                <div class="d-flex align-items-center justify-content-between px-3 py-2 bg-black bg-opacity-50 small">
+            <!-- 실시간 특정 Window 화면 공유 뷰어 영역 (전체 채팅창 크기) -->
+            <div id="screen-share-panel" class="screen-share-panel bg-dark text-white hidden">
+                <div class="d-flex align-items-center justify-content-between px-3 py-2 bg-black bg-opacity-50 small flex-shrink-0">
                     <div class="d-flex align-items-center gap-2">
                         <span class="live-dot"></span>
                         <strong id="screen-share-status-text">특정 Window 화면 공유 중</strong>
@@ -145,18 +150,18 @@
                     </span>
                 </div>
 
-                <form id="chat-form" class="d-flex gap-2" onsubmit="sendChatMessage(event)">
+                <form id="chat-form" class="d-flex align-items-end gap-2" onsubmit="sendChatMessage(event)">
                     <input type="file" id="file-input" class="hidden" onchange="uploadSelectedFile()">
                     <button type="button" class="btn btn-outline-secondary text-nowrap" title="파일 업로드" onclick="document.getElementById('file-input').click()">
                         📎 파일 업로드
                     </button>
-                    <input
-                        type="text"
+                    <textarea
                         id="message-input"
-                        class="form-control"
-                        placeholder="메시지를 입력하세요... (Enter로 전송)"
-                        autocomplete="off"
-                    >
+                        class="form-control chat-message-textarea"
+                        rows="2"
+                        placeholder="메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)"
+                        onkeydown="handleMessageKeydown(event)"
+                    ></textarea>
                     <button type="submit" class="btn btn-primary text-nowrap px-3 fw-semibold">전송</button>
                 </form>
             </div>
@@ -168,7 +173,7 @@
         <div class="card border-0 shadow-sm rounded-3 flex-grow-1 d-flex flex-column overflow-hidden">
             <div class="card-header bg-white py-2 px-3 d-flex align-items-center justify-content-between">
                 <h3 class="h6 fw-bold mb-0">👥 채팅방 접속자 List</h3>
-                <span id="participant-count-badge" class="badge rounded-pill text-bg-success">1명</span>
+                <span id="participant-count-badge" class="badge rounded-pill text-bg-success">1 / {{ max_participants or 6 }}명</span>
             </div>
             <div class="card-body p-2 d-flex flex-column overflow-hidden">
                 <p class="text-secondary mb-2 px-1" style="font-size: 0.76rem;">

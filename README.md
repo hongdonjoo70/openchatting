@@ -3,6 +3,7 @@
 Flask와 Flask-SocketIO, SQLite(SQLAlchemy) 기반으로 동작하는 실시간 오픈채팅 웹 애플리케이션입니다.
 
 ## ✨ 주요 기능
+
 1. **Python 가상환경(`venv`) 패키지 설치 지원**
    - `requirements.txt`, `setup_venv.bat`(Windows), `setup_venv.sh`(Linux/macOS) 제공
 2. **Docker 빌드 및 실행 지원**
@@ -28,11 +29,15 @@ Flask와 Flask-SocketIO, SQLite(SQLAlchemy) 기반으로 동작하는 실시간 
 ## 🚀 1. Python Virtual Environment (`venv`) 설정 및 실행 방법
 
 ### Windows (PowerShell / CMD)
+
 자동 설치 스크립트 실행:
+
 ```bat
 setup_venv.bat
 ```
+
 또는 수동 명령어 실행:
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -41,6 +46,7 @@ python app.py
 ```
 
 ### Linux / macOS
+
 ```bash
 chmod +x setup_venv.sh
 ./setup_venv.sh
@@ -55,14 +61,16 @@ python app.py
 ## 🐳 2. Docker 빌드 및 실행 방법
 
 ### Docker 단독 빌드 및 실행
+
 ```bash
 docker build -t openchatting:latest .
 docker run -d -p 4000:4000 --name openchatting-app openchatting:latest
 ```
 
 ### Docker Compose 실행
+
 ```bash
 docker compose up --build -d
 ```
-실행 후 **`http://localhost:4000`** 에서 서비스를 이용할 수 있습니다.
 
+실행 후 **`http://localhost:4000`** 에서 서비스를 이용할 수 있습니다.

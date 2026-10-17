@@ -22,7 +22,52 @@ function scrollToBottom() {
     const list = document.getElementById("message-list");
     if (list) list.scrollTop = list.scrollHeight;
 }
-document.addEventListener("DOMContentLoaded", scrollToBottom);
+
+function initRoomBackground() {
+    const list = document.getElementById("message-list");
+    const select = document.getElementById("room-bg-select");
+    if (!list || !select) return;
+
+    const defaultBg = list.dataset.defaultBg || "1";
+    let currentBg = defaultBg;
+    try {
+        currentBg = localStorage.getItem(`room_bg_pref_${ROOM_ID}`) || defaultBg;
+    } catch (e) {
+        console.warn(e);
+    }
+
+    applyRoomBackground(currentBg);
+    select.value = currentBg;
+}
+
+function changeRoomBackground(val) {
+    applyRoomBackground(val);
+    try {
+        localStorage.setItem(`room_bg_pref_${ROOM_ID}`, val);
+    } catch (e) {
+        console.warn(e);
+    }
+}
+
+function applyRoomBackground(val) {
+    const list = document.getElementById("message-list");
+    if (!list) return;
+
+    const classesToRemove = [];
+    list.classList.forEach((cls) => {
+        if (cls.startsWith("room-bg-")) {
+            classesToRemove.push(cls);
+        }
+    });
+    classesToRemove.forEach((cls) => list.classList.remove(cls));
+
+    list.classList.add(`room-bg-${val}`);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    scrollToBottom();
+    initRoomBackground();
+});
 
 socket.on("connect", () => {
     socket.emit("join_chat_room", { room_id: ROOM_ID });

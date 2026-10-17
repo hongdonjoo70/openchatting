@@ -26,6 +26,16 @@
                 </div>
 
                 <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="d-flex align-items-center gap-1 bg-light px-2 py-1 rounded-2 border">
+                        <label for="room-bg-select" class="small fw-bold text-secondary mb-0 text-nowrap" style="font-size: 0.78rem;">🖼️ 배경:</label>
+                        <select id="room-bg-select" class="form-select form-select-sm border-0 bg-transparent py-0 px-1" style="font-size: 0.78rem; width: auto;" onchange="changeRoomBackground(this.value)">
+                            <option value="1">1. 바위 폭포 & 맑은 소</option>
+                            <option value="2">2. 기암절벽 & 푸른 호수</option>
+                            <option value="3">3. 청정 이끼계곡 & 폭포</option>
+                            <option value="4">4. 햇살 비치는 숲속 계류</option>
+                            <option value="none">단색 (기본 회색)</option>
+                        </select>
+                    </div>
                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openNoticeModal()">
                         📢 공지사항 설정/관리
                     </button>
@@ -89,8 +99,9 @@
                 </div>
             </div>
 
+            {% set default_bg_idx = ((room.id - 1) % 4) + 1 %}
             <!-- 메시지 출력 리스트 -->
-            <div id="message-list" class="message-list flex-grow-1 p-3 d-flex flex-column gap-2">
+            <div id="message-list" class="message-list room-bg-{{ default_bg_idx }} flex-grow-1 p-3 d-flex flex-column gap-2" data-default-bg="{{ default_bg_idx }}">
                 {% for msg in messages %}
                     {% if msg.msg_type == 'system' %}
                         <div class="msg-system align-self-center badge rounded-pill text-bg-secondary bg-opacity-25 text-dark fw-normal py-1 px-3" data-msg-id="{{ msg.id }}">

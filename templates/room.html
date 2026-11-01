@@ -36,6 +36,12 @@
                             <option value="none">단색 (기본 회색)</option>
                         </select>
                     </div>
+
+                    <button type="button" id="btn-open-poll" class="btn btn-outline-primary btn-sm position-relative fw-semibold" onclick="openPollModal()">
+                        📊 투표
+                        <span id="active-poll-badge" class="badge rounded-pill bg-danger hidden" style="font-size: 0.68rem;">0</span>
+                    </button>
+
                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="openNoticeModal()">
                         📢 공지사항 설정/관리
                     </button>
@@ -75,6 +81,18 @@
                             onclick="deleteActiveNotice()">
                         삭제
                     </button>
+                </div>
+            </div>
+
+            <!-- 상단 고정 투표 알림 배너 -->
+            <div id="poll-active-banner" class="px-3 py-2 border-bottom bg-primary bg-opacity-10 d-flex align-items-center justify-content-between gap-2 small hidden">
+                <div class="d-flex align-items-center gap-2 text-truncate">
+                    <span class="badge text-bg-primary fw-normal">📊 진행 중인 투표</span>
+                    <strong id="poll-active-banner-title" class="text-truncate text-dark"></strong>
+                    <span id="poll-active-banner-deadline" class="badge bg-warning text-dark"></span>
+                </div>
+                <div class="d-flex gap-1 flex-shrink-0">
+                    <button type="button" class="btn btn-primary btn-sm py-0 px-2 fw-semibold" onclick="openPollModal()">참여 / 결과</button>
                 </div>
             </div>
 
@@ -201,12 +219,17 @@
             <div class="card-body p-2 overflow-hidden d-flex flex-column">
                 <ul id="room-file-list" class="list-unstyled mb-0 overflow-y-auto d-flex flex-column gap-2 flex-grow-1">
                     {% for f in files %}
-                    <li class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded-2 small">
+                    <li class="d-flex align-items-center justify-content-between gap-2 p-2 border rounded-2 small" id="sidebar-file-{{ f.id }}">
                         <div class="text-truncate">
                             <strong class="d-block text-truncate" title="{{ f.original_filename }}">{{ f.original_filename }}</strong>
                             <small class="text-secondary">{{ f.uploader_name }} · {{ (f.file_size / 1024)|round(1) }} KB</small>
                         </div>
-                        <a href="{{ url_for('download_file', file_id=f.id) }}" class="btn btn-outline-secondary btn-sm py-0 px-2 text-nowrap">다운로드</a>
+                        <div class="d-flex align-items-center gap-1">
+                            <a href="{{ url_for('download_file', file_id=f.id) }}" class="btn btn-outline-secondary btn-sm py-0 px-2 text-nowrap">다운로드</a>
+                            {% if session.get('user_id') == f.uploader_id %}
+                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 text-nowrap" onclick="deleteUploadedFile({{ f.id }})" title="파일 삭제">삭제</button>
+                            {% endif %}
+                        </div>
                     </li>
                     {% else %}
                     <li id="empty-file-item" class="text-secondary small p-2">아직 업로드된 파일이 없습니다.</li>
@@ -312,6 +335,116 @@
 
             <h4 class="h6 fw-bold mb-2">💬 DB 저장 메시지 목록 (최근 200건)</h4>
             <div id="db-messages-container" class="table-responsive border rounded-2" style="max-height: 240px;">로딩 중...</div>
+        </div>
+    </div>
+</div>
+
+<!-- 모달 4: 채팅방 투표 (Poll) 모달 -->
+<div id="poll-modal" class="modal-backdrop-custom hidden">
+    <div class="card shadow-lg border-0 rounded-4 w-100" style="max-width: 680px; max-height: 90vh;">
+        <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
+            <h3 class="h6 fw-bold mb-0">📊 채팅방 투표 (Poll)</h3>
+            <button type="button" class="btn-close" onclick="closePollModal()"></button>
+        </div>
+        <div class="card-body p-4 overflow-y-auto">
+            <!-- 탭 전환 -->
+            <ul class="nav nav-pills nav-fill bg-light p-1 rounded-3 mb-3 border">
+                <li class="nav-item">
+                    <button type="button" class="nav-link active fw-semibold py-1 small" id="tab-poll-active-btn" onclick="switchPollTab('active')">
+                        진행 중인 투표 (<span id="poll-active-count">0</span>)
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link fw-semibold py-1 small" id="tab-poll-closed-btn" onclick="switchPollTab('closed')">
+                        마감된 투표 / 최종 결과 (<span id="poll-closed-count">0</span>)
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link fw-semibold py-1 small text-primary" id="tab-poll-create-btn" onclick="switchPollTab('create')">
+                        ➕ 새 투표 만들기
+                    </button>
+                </li>
+            </ul>
+
+            <!-- 1. 진행 중인 투표 탭 -->
+            <div id="poll-tab-active-panel">
+                <div id="poll-active-list" class="d-flex flex-column gap-3">
+                    <div class="text-secondary small p-3 text-center">진행 중인 투표를 불러오는 중...</div>
+                </div>
+            </div>
+
+            <!-- 2. 마감된 투표 (최종 결과) 탭 -->
+            <div id="poll-tab-closed-panel" class="hidden">
+                <div id="poll-closed-list" class="d-flex flex-column gap-3">
+                    <div class="text-secondary small p-3 text-center">마감된 투표를 불러오는 중...</div>
+                </div>
+            </div>
+
+            <!-- 3. 새 투표 만들기 탭 -->
+            <div id="poll-tab-create-panel" class="hidden">
+                <form id="poll-create-form" onsubmit="submitCreatePoll(event)">
+                    <div class="mb-3">
+                        <label for="poll-create-title" class="form-label small fw-semibold">투표 제목 / 안건 *</label>
+                        <input type="text" class="form-control" id="poll-create-title" placeholder="예: 오늘 점심 메뉴 뭐 먹을까요?" required maxlength="200">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold d-block">선택 방식 *</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="poll_choice_type" id="poll-type-single" value="single" checked>
+                                <label class="form-check-label small" for="poll-type-single">
+                                    🔘 <strong>단수 선택</strong> (1개만 선택 가능)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="poll_choice_type" id="poll-type-multiple" value="multiple">
+                                <label class="form-check-label small" for="poll-type-multiple">
+                                    ☑️ <strong>복수 선택</strong> (여러 개 중복 선택 가능)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <label class="form-label small fw-semibold mb-0">투표 선택 항목 (최소 2개) *</label>
+                            <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="addPollOptionInput()">+ 항목 추가</button>
+                        </div>
+                        <div id="poll-options-input-container" class="d-flex flex-column gap-2">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">1</span>
+                                <input type="text" class="form-control poll-opt-input" placeholder="항목 1 입력" required maxlength="200">
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">2</span>
+                                <input type="text" class="form-control poll-opt-input" placeholder="항목 2 입력" required maxlength="200">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="poll-create-deadline" class="form-label small fw-semibold">투표 마감 시간 *</label>
+                        <div class="d-flex gap-1 mb-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="setQuickDeadline(10)">+10분 후</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="setQuickDeadline(30)">+30분 후</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="setQuickDeadline(60)">+1시간 후</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="setQuickDeadline(1440)">+24시간 후</button>
+                        </div>
+                        <input type="datetime-local" class="form-control" id="poll-create-deadline" required>
+                        <div class="form-text small">마감 시간이 지나면 투표 참여가 자동으로 마감되고 최종 결과가 확정됩니다.</div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="switchPollTab('active')">취소</button>
+                        <button type="submit" class="btn btn-primary btn-sm fw-semibold px-3">📊 투표 개설하기</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="card-footer bg-white border-top py-2 px-4 d-flex justify-content-between align-items-center">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadRoomPolls()">🔄 새로고침</button>
+            <button type="button" class="btn btn-secondary btn-sm px-3" onclick="closePollModal()">닫기</button>
         </div>
     </div>
 </div>

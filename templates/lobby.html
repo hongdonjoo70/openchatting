@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}오픈채팅방 목록 - OpenChatting{% endblock %}
+{% block title %}오픈채팅방 로비 & 게시판 - OpenChatting{% endblock %}
 
 {% block head %}
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -8,76 +8,155 @@
 {% block body_class %}lobby-body-bg{% endblock %}
 
 {% block content %}
-<div class="container py-2 flex-grow-1 d-flex flex-column">
-    <div class="lobby-header-box shadow-sm rounded-4 p-3 p-md-4 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-3">
-        <div>
-            <div class="d-flex align-items-center gap-2">
-                <h2 class="h4 fw-bold mb-0">오픈채팅방 로비</h2>
-                <span class="badge rounded-pill text-bg-primary">채팅방 {{ room_list|length }} / {{ max_rooms or 6 }}개</span>
+<div class="container py-2 flex-grow-1 d-flex flex-column gap-4">
+    <!-- 1. 오픈채팅방 로비 섹션 -->
+    <div>
+        <div class="lobby-header-box shadow-sm rounded-4 p-3 p-md-4 mb-3 d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h2 class="h4 fw-bold mb-0">💬 오픈채팅방 로비</h2>
+                    <span class="badge rounded-pill text-bg-primary">채팅방 {{ room_list|length }} / {{ max_rooms or 6 }}개</span>
+                </div>
+                <p class="text-secondary small mb-0 mt-1">채팅방은 최대 {{ max_rooms or 6 }}개까지 개설 가능하며, 채팅방별 최대 참여 인원은 {{ max_participants or 6 }}명입니다.</p>
             </div>
-            <p class="text-secondary small mb-0 mt-1">채팅방은 최대 {{ max_rooms or 6 }}개까지 개설 가능하며, 채팅방별 최대 참여 인원은 {{ max_participants or 6 }}명입니다.</p>
+            {% if (room_list|length) >= (max_rooms or 6) %}
+            <button type="button" class="btn btn-secondary fw-semibold shadow-sm" onclick="alert('채팅방은 최대 {{ max_rooms or 6 }}개까지만 개설할 수 있습니다.')">
+                🔒 채팅방 개설 마감 ({{ room_list|length }}/{{ max_rooms or 6 }})
+            </button>
+            {% else %}
+            <button type="button" class="btn btn-primary fw-semibold shadow-sm" onclick="document.getElementById('create-room-modal').classList.remove('hidden')">
+                ➕ 새 오픈채팅방 개설 ({{ room_list|length }}/{{ max_rooms or 6 }})
+            </button>
+            {% endif %}
         </div>
-        {% if (room_list|length) >= (max_rooms or 6) %}
-        <button type="button" class="btn btn-secondary fw-semibold shadow-sm" onclick="alert('채팅방은 최대 {{ max_rooms or 6 }}개까지만 개설할 수 있습니다.')">
-            🔒 채팅방 개설 마감 ({{ room_list|length }}/{{ max_rooms or 6 }})
-        </button>
-        {% else %}
-        <button type="button" class="btn btn-primary fw-semibold shadow-sm" onclick="document.getElementById('create-room-modal').classList.remove('hidden')">
-            ➕ 새 오픈채팅방 개설 ({{ room_list|length }}/{{ max_rooms or 6 }})
-        </button>
-        {% endif %}
-    </div>
 
-    <div class="row g-3">
-        {% for item in room_list %}
-        <div class="col-md-6 col-xl-4">
-            <div class="card h-100 shadow-sm border-0 rounded-4 lobby-room-card">
-                <div class="card-body d-flex flex-column justify-content-between gap-3">
-                    <div>
-                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                            <h3 class="h5 fw-bold mb-0 text-truncate">{{ item.room.title }}</h3>
-                            <span class="badge rounded-pill {% if item.is_full %}text-bg-danger{% else %}text-bg-success{% endif %}">
-                                👥 {{ item.participant_count }} / {{ max_participants or 6 }}명 접속 중
-                            </span>
-                        </div>
-                        <p class="text-secondary small mb-2">{{ item.room.description or "설명이 없는 오픈채팅방입니다." }}</p>
+        <div class="row g-3">
+            {% for item in room_list %}
+            <div class="col-md-6 col-xl-4">
+                <div class="card h-100 shadow-sm border-0 rounded-4 lobby-room-card">
+                    <div class="card-body d-flex flex-column justify-content-between gap-3">
+                        <div>
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                <h3 class="h5 fw-bold mb-0 text-truncate">{{ item.room.title }}</h3>
+                                <span class="badge rounded-pill {% if item.is_full %}text-bg-danger{% else %}text-bg-success{% endif %}">
+                                    👥 {{ item.participant_count }} / {{ max_participants or 6 }}명 접속 중
+                                </span>
+                            </div>
+                            <p class="text-secondary small mb-2">{{ item.room.description or "설명이 없는 오픈채팅방입니다." }}</p>
 
-                        {% if item.active_notice %}
-                        <div class="alert alert-info py-2 px-3 small mb-0">
-                            📢 <strong>공지:</strong> {{ item.active_notice }}
+                            {% if item.active_notice %}
+                            <div class="alert alert-info py-2 px-3 small mb-0">
+                                📢 <strong>공지:</strong> {{ item.active_notice }}
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                    </div>
 
-                    <div>
-                        <div class="d-flex justify-content-between text-secondary small mb-2">
-                            <span>개설자: <strong>{{ item.room.creator_name }}</strong> ({{ item.room.creator_id }})</span>
-                            <span>누적 메시지: {{ item.msg_count }}건</span>
+                        <div>
+                            <div class="d-flex justify-content-between text-secondary small mb-2">
+                                <span>개설자: <strong>{{ item.room.creator_name }}</strong> ({{ item.room.creator_id }})</span>
+                                <span>누적 메시지: {{ item.msg_count }}건</span>
+                            </div>
+                            {% if item.is_full and session.get('user_name') not in item.participants %}
+                            <button type="button" class="btn btn-secondary w-100 fw-semibold" disabled>
+                                정원 초과 ({{ item.participant_count }}/{{ max_participants or 6 }}명)
+                            </button>
+                            {% else %}
+                            <a href="{{ url_for('enter_room', room_id=item.room.id) }}" class="btn btn-primary w-100 fw-semibold">
+                                채팅방 입장하기 →
+                            </a>
+                            {% endif %}
                         </div>
-                        {% if item.is_full and session.get('user_name') not in item.participants %}
-                        <button type="button" class="btn btn-secondary w-100 fw-semibold" disabled>
-                            정원 초과 ({{ item.participant_count }}/{{ max_participants or 6 }}명)
-                        </button>
-                        {% else %}
-                        <a href="{{ url_for('enter_room', room_id=item.room.id) }}" class="btn btn-primary w-100 fw-semibold">
-                            채팅방 입장하기 →
-                        </a>
-                        {% endif %}
                     </div>
                 </div>
             </div>
-        </div>
-        {% else %}
-        <div class="col-12">
-            <div class="card border-0 shadow-sm p-5 text-center text-secondary rounded-4 lobby-room-card">
-                개설된 오픈채팅방이 없습니다. 첫 번째 채팅방을 만들어보세요!
+            {% else %}
+            <div class="col-12">
+                <div class="card border-0 shadow-sm p-5 text-center text-secondary rounded-4 lobby-room-card">
+                    개설된 오픈채팅방이 없습니다. 첫 번째 채팅방을 만들어보세요!
+                </div>
             </div>
+            {% endfor %}
         </div>
-        {% endfor %}
+    </div>
+
+    <!-- 2. 로비 게시판 섹션 -->
+    <div class="lobby-header-box shadow-sm rounded-4 p-3 p-md-4 mb-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3 pb-2 border-bottom">
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h2 class="h4 fw-bold mb-0">📋 로비 게시판</h2>
+                    <span class="badge rounded-pill text-bg-success">전체 {{ board_posts|length if board_posts else 0 }}건</span>
+                </div>
+                <p class="text-secondary small mb-0 mt-1">
+                    자유롭게 글 또는 그림(1장)과 글을 등록할 수 있습니다. 삭제 및 변경은 등록한 본인만 가능합니다.
+                </p>
+            </div>
+            <button type="button" class="btn btn-success fw-semibold shadow-sm" onclick="openBoardCreateModal()">
+                ✍️ 게시물 등록 (추가)
+            </button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 bg-white rounded-3 overflow-hidden shadow-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col" class="ps-3" style="width: 70px;">번호</th>
+                        <th scope="col">제목</th>
+                        <th scope="col" style="width: 180px;">등록자</th>
+                        <th scope="col" style="width: 180px;">수정시간</th>
+                        <th scope="col" class="text-end pe-3" style="width: 170px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if board_posts %}
+                        {% for post in board_posts %}
+                        <tr style="cursor: pointer;" onclick="openBoardDetailModal({{ post.id }})">
+                            <td class="ps-3 text-secondary fw-semibold">#{{ post.id }}</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-semibold text-dark text-break">{{ post.title }}</span>
+                                    {% if post.image_filename %}
+                                    <span class="badge text-bg-info bg-opacity-75" title="그림 첨부됨">🖼️ 그림</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge rounded-pill text-bg-light border text-dark px-2 py-1">
+                                    👤 {{ post.author_name }} ({{ post.author_id }})
+                                </span>
+                            </td>
+                            <td class="text-secondary small">{{ post.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td class="text-end pe-3" onclick="event.stopPropagation();">
+                                <div class="d-inline-flex gap-1">
+                                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" onclick="openBoardDetailModal({{ post.id }})">
+                                        보기
+                                    </button>
+                                    {% if session.get('user_id') == post.author_id %}
+                                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="openBoardEditModal({{ post.id }})">
+                                        변경
+                                    </button>
+                                    <form action="{{ url_for('board_delete', post_id=post.id) }}" method="POST" class="d-inline" onsubmit="return confirm('이 게시물을 정말 삭제하시겠습니까?');">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2">삭제</button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-secondary py-5">
+                                등록된 게시물이 없습니다. <strong>[✍️ 게시물 등록]</strong> 버튼을 눌러 첫 게시물을 작성해보세요!
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
-<!-- 새 채팅방 개설 모달 -->
+<!-- 모달 1: 새 채팅방 개설 모달 -->
 <div id="create-room-modal" class="modal-backdrop-custom hidden">
     <div class="card shadow-lg border-0 rounded-4 w-100" style="max-width: 520px;">
         <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
@@ -100,6 +179,119 @@
             <div class="d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('create-room-modal').classList.add('hidden')">취소</button>
                 <button type="submit" class="btn btn-primary fw-semibold">채팅방 개설 및 입장</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 모달 2: 게시물 등록(추가) 모달 -->
+<div id="board-create-modal" class="modal-backdrop-custom hidden">
+    <div class="card shadow-lg border-0 rounded-4 w-100" style="max-width: 600px; max-height: 90vh;">
+        <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
+            <h3 class="h6 fw-bold mb-0">✍️ 새 게시물 등록</h3>
+            <button type="button" class="btn-close" onclick="closeBoardCreateModal()"></button>
+        </div>
+        <form action="{{ url_for('board_create') }}" method="POST" enctype="multipart/form-data" class="card-body p-4 overflow-y-auto">
+            <div class="mb-3">
+                <label class="form-label small fw-semibold text-secondary">등록자</label>
+                <input type="text" class="form-control form-control-sm bg-light" value="{{ session.get('user_name') }} ({{ session.get('user_id') }})" readonly>
+            </div>
+            <div class="mb-3">
+                <label for="board_create_title" class="form-label small fw-semibold">제목 *</label>
+                <input type="text" class="form-control" id="board_create_title" name="title" placeholder="게시물 제목을 입력하세요" required maxlength="200">
+            </div>
+            <div class="mb-3">
+                <label for="board_create_image" class="form-label small fw-semibold">그림 첨부 (선택 - 최대 1장)</label>
+                <input type="file" class="form-control" id="board_create_image" name="image" accept=".png,.jpg,.jpeg,.gif,.webp" onchange="previewBoardImage(this, 'create-img-preview')">
+                <div class="form-text small">글만 작성하거나, 그림 1개와 글을 함께 등록할 수 있습니다. (.jpg, .png, .gif, .webp)</div>
+                <div id="create-img-preview" class="mt-2 hidden">
+                    <img src="" alt="미리보기" class="img-fluid rounded-3 border" style="max-height: 200px;">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="board_create_content" class="form-label small fw-semibold">내용 (글) *</label>
+                <textarea class="form-control" id="board_create_content" name="content" rows="5" placeholder="내용을 입력하세요" required></textarea>
+            </div>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary" onclick="closeBoardCreateModal()">취소</button>
+                <button type="submit" class="btn btn-success fw-semibold">게시물 등록</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 모달 3: 게시물 상세 보기 모달 -->
+<div id="board-detail-modal" class="modal-backdrop-custom hidden">
+    <div class="card shadow-lg border-0 rounded-4 w-100" style="max-width: 640px; max-height: 90vh;">
+        <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
+            <h3 class="h6 fw-bold mb-0" id="detail-post-title">게시물 상세 보기</h3>
+            <button type="button" class="btn-close" onclick="closeBoardDetailModal()"></button>
+        </div>
+        <div class="card-body p-4 overflow-y-auto">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 pb-3 mb-3 border-bottom small text-secondary">
+                <div>
+                    등록자: <strong class="text-dark" id="detail-post-author"></strong>
+                </div>
+                <div>
+                    수정시간: <span id="detail-post-updated"></span>
+                </div>
+            </div>
+
+            <div id="detail-post-image-wrap" class="mb-3 text-center hidden">
+                <img id="detail-post-image" src="" alt="첨부 그림" class="img-fluid rounded-3 border shadow-sm" style="max-height: 360px; object-fit: contain;">
+            </div>
+
+            <div id="detail-post-content" class="p-3 bg-light rounded-3 border" style="white-space: pre-wrap; word-break: break-word; min-height: 100px;"></div>
+        </div>
+        <div class="card-footer bg-white border-top py-3 px-4 d-flex align-items-center justify-content-between">
+            <div id="detail-author-actions" class="d-flex gap-2"></div>
+            <button type="button" class="btn btn-secondary btn-sm px-3" onclick="closeBoardDetailModal()">닫기</button>
+        </div>
+    </div>
+</div>
+
+<!-- 모달 4: 게시물 변경(수정) 모달 -->
+<div id="board-edit-modal" class="modal-backdrop-custom hidden">
+    <div class="card shadow-lg border-0 rounded-4 w-100" style="max-width: 600px; max-height: 90vh;">
+        <div class="card-header bg-white border-bottom py-3 px-4 d-flex align-items-center justify-content-between">
+            <h3 class="h6 fw-bold mb-0">✏️ 게시물 변경 (수정)</h3>
+            <button type="button" class="btn-close" onclick="closeBoardEditModal()"></button>
+        </div>
+        <form id="board-edit-form" method="POST" enctype="multipart/form-data" class="card-body p-4 overflow-y-auto">
+            <div class="mb-3">
+                <label for="board_edit_title" class="form-label small fw-semibold">제목 *</label>
+                <input type="text" class="form-control" id="board_edit_title" name="title" required maxlength="200">
+            </div>
+
+            <div id="edit-current-image-box" class="mb-3 p-2 border rounded-3 bg-light hidden">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="small fw-semibold text-secondary">현재 첨부된 그림</span>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="board_edit_remove_image" name="remove_image">
+                        <label class="form-check-label small text-danger fw-semibold" for="board_edit_remove_image">
+                            기존 그림 삭제
+                        </label>
+                    </div>
+                </div>
+                <img id="edit-current-image" src="" alt="현재 그림" class="img-fluid rounded-2 border" style="max-height: 150px;">
+            </div>
+
+            <div class="mb-3">
+                <label for="board_edit_image" class="form-label small fw-semibold">새 그림 업로드 (선택 - 선택 시 기존 그림 대체)</label>
+                <input type="file" class="form-control" id="board_edit_image" name="image" accept=".png,.jpg,.jpeg,.gif,.webp" onchange="previewBoardImage(this, 'edit-img-preview')">
+                <div id="edit-img-preview" class="mt-2 hidden">
+                    <img src="" alt="새 그림 미리보기" class="img-fluid rounded-3 border" style="max-height: 180px;">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="board_edit_content" class="form-label small fw-semibold">내용 (글) *</label>
+                <textarea class="form-control" id="board_edit_content" name="content" rows="5" required></textarea>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary" onclick="closeBoardEditModal()">취소</button>
+                <button type="submit" class="btn btn-primary fw-semibold">변경 내용 저장</button>
             </div>
         </form>
     </div>
@@ -129,5 +321,130 @@
         alert(data.message || "접속이 해제되어 로그아웃되었습니다.");
         window.location.href = "/logout";
     });
+
+    // ==========================================
+    // 게시판 모달 제어 스크립트
+    // ==========================================
+    function openBoardCreateModal() {
+        document.getElementById("board_create_title").value = "";
+        document.getElementById("board_create_content").value = "";
+        document.getElementById("board_create_image").value = "";
+        document.getElementById("create-img-preview").classList.add("hidden");
+        document.getElementById("board-create-modal").classList.remove("hidden");
+    }
+
+    function closeBoardCreateModal() {
+        document.getElementById("board-create-modal").classList.add("hidden");
+    }
+
+    function closeBoardDetailModal() {
+        document.getElementById("board-detail-modal").classList.add("hidden");
+    }
+
+    function closeBoardEditModal() {
+        document.getElementById("board-edit-modal").classList.add("hidden");
+    }
+
+    function previewBoardImage(input, previewWrapId) {
+        const wrap = document.getElementById(previewWrapId);
+        const img = wrap.querySelector("img");
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                img.src = e.target.result;
+                wrap.classList.remove("hidden");
+            };
+            reader.readAsDataURL(input.files[0]);
+        } else {
+            img.src = "";
+            wrap.classList.add("hidden");
+        }
+    }
+
+    async function openBoardDetailModal(postId) {
+        try {
+            const res = await fetch(`/api/board/${postId}`);
+            const data = await res.json();
+            if (!data.ok) {
+                alert("게시물을 불러올 수 없습니다.");
+                return;
+            }
+            const p = data.post;
+            document.getElementById("detail-post-title").textContent = p.title;
+            document.getElementById("detail-post-author").textContent = `${p.author_name} (${p.author_id})`;
+            document.getElementById("detail-post-updated").textContent = p.updated_at;
+            document.getElementById("detail-post-content").textContent = p.content;
+
+            const imgWrap = document.getElementById("detail-post-image-wrap");
+            const imgEl = document.getElementById("detail-post-image");
+            if (p.has_image && p.image_url) {
+                imgEl.src = p.image_url;
+                imgWrap.classList.remove("hidden");
+            } else {
+                imgEl.src = "";
+                imgWrap.classList.add("hidden");
+            }
+
+            const actionsEl = document.getElementById("detail-author-actions");
+            if (p.is_author) {
+                actionsEl.innerHTML = `
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="closeBoardDetailModal(); openBoardEditModal(${p.id});">
+                        ✏️ 변경 (수정)
+                    </button>
+                    <form action="/board/${p.id}/delete" method="POST" class="d-inline" onsubmit="return confirm('이 게시물을 정말 삭제하시겠습니까?');">
+                        <button type="submit" class="btn btn-danger btn-sm">🗑️ 삭제</button>
+                    </form>
+                `;
+            } else {
+                actionsEl.innerHTML = `<span class="text-secondary small">🔒 등록자(${p.author_name})만 변경/삭제할 수 있습니다.</span>`;
+            }
+
+            document.getElementById("board-detail-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error(err);
+            alert("게시물 조회 중 오류가 발생했습니다.");
+        }
+    }
+
+    async function openBoardEditModal(postId) {
+        try {
+            const res = await fetch(`/api/board/${postId}`);
+            const data = await res.json();
+            if (!data.ok) {
+                alert("게시물 정보를 불러올 수 없습니다.");
+                return;
+            }
+            const p = data.post;
+            if (!p.is_author) {
+                alert("등록한 사람만 수정할 수 있습니다.");
+                return;
+            }
+
+            const form = document.getElementById("board-edit-form");
+            form.action = `/board/${p.id}/update`;
+            document.getElementById("board_edit_title").value = p.title;
+            document.getElementById("board_edit_content").value = p.content;
+            document.getElementById("board_edit_image").value = "";
+            document.getElementById("edit-img-preview").classList.add("hidden");
+
+            const removeCheck = document.getElementById("board_edit_remove_image");
+            if (removeCheck) removeCheck.checked = false;
+
+            const curImgBox = document.getElementById("edit-current-image-box");
+            const curImg = document.getElementById("edit-current-image");
+            if (p.has_image && p.image_url) {
+                curImg.src = p.image_url;
+                curImgBox.classList.remove("hidden");
+            } else {
+                curImg.src = "";
+                curImgBox.classList.add("hidden");
+            }
+
+            document.getElementById("board-edit-modal").classList.remove("hidden");
+        } catch (err) {
+            console.error(err);
+            alert("게시물 정보를 불러오는 중 오류가 발생했습니다.");
+        }
+    }
 </script>
 {% endblock %}

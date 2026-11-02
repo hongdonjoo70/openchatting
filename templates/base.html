@@ -19,18 +19,11 @@
 
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 {% if session.get('user_id') %}
-                    <span class="badge rounded-pill text-bg-light border text-dark py-2 px-3" title="동일 IP에서는 1명의 사용자만 접속 가능합니다">
-                        🌐 접속 IP: <strong>{{ client_ip or request.remote_addr }}</strong> (1 IP 1 User)
-                    </span>
                     <span class="badge rounded-pill text-bg-light border text-dark py-2 px-3">
-                        👤 <strong>{{ session.get('user_name') }}</strong> ({{ session.get('user_id') }})
+                        👤 <strong>{{ session.get('user_name') }}</strong>님
                     </span>
                     <a href="{{ url_for('lobby') }}" class="btn btn-outline-secondary btn-sm">채팅방 목록</a>
-                    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">로그아웃</a>
-                {% else %}
-                    <span class="badge rounded-pill text-bg-light border text-dark py-2 px-3">
-                        🌐 내 IP: <strong>{{ client_ip or request.remote_addr }}</strong>
-                    </span>
+                    <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">퇴장 / 나가기</a>
                 {% endif %}
             </div>
         </div>

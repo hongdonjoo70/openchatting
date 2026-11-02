@@ -133,10 +133,10 @@
                              data-msg-id="{{ msg.id }}">
                             <div class="msg-bubble p-2 px-3 rounded-3 border shadow-sm">
                                 <div class="d-flex align-items-center gap-2 mb-1 flex-wrap small">
-                                    <strong>{{ msg.sender_name }} ({{ msg.sender_id }})</strong>
+                                    <strong>{{ msg.sender_name }}</strong>
                                     {% if is_whisper %}
                                         <span class="whisper-badge badge rounded-pill">
-                                            🔒 귓속말 → {{ msg.target_user_name or msg.target_user_id }}
+                                            🔒 귓속말 → {{ msg.target_user_name }}
                                         </span>
                                     {% else %}
                                         <span class="badge rounded-pill text-bg-light border text-secondary">전체</span>
@@ -267,7 +267,7 @@
                     <div>
                         <strong>{{ n.content }}</strong>
                         {% if n.is_active %}<span class="badge text-bg-success ms-1">현재 공지</span>{% endif %}
-                        <div class="text-secondary">{{ n.author_name }} ({{ n.author_id }}) · {{ n.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                        <div class="text-secondary">{{ n.author_name }} · {{ n.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
                     </div>
                     <button type="button" class="btn btn-danger btn-sm py-0 px-2" onclick="deleteNoticeById({{ n.id }})">삭제</button>
                 </li>

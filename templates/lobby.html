@@ -53,7 +53,7 @@
 
                         <div>
                             <div class="d-flex justify-content-between text-secondary small mb-2">
-                                <span>개설자: <strong>{{ item.room.creator_name }}</strong> ({{ item.room.creator_id }})</span>
+                                <span>개설자: <strong>{{ item.room.creator_name }}</strong></span>
                                 <span>누적 메시지: {{ item.msg_count }}건</span>
                             </div>
                             {% if item.is_full and session.get('user_name') not in item.participants %}
@@ -122,7 +122,7 @@
                             </td>
                             <td>
                                 <span class="badge rounded-pill text-bg-light border text-dark px-2 py-1">
-                                    👤 {{ post.author_name }} ({{ post.author_id }})
+                                    👤 {{ post.author_name }}
                                 </span>
                             </td>
                             <td class="text-secondary small">{{ post.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
@@ -194,7 +194,7 @@
         <form action="{{ url_for('board_create') }}" method="POST" enctype="multipart/form-data" class="card-body p-4 overflow-y-auto">
             <div class="mb-3">
                 <label class="form-label small fw-semibold text-secondary">등록자</label>
-                <input type="text" class="form-control form-control-sm bg-light" value="{{ session.get('user_name') }} ({{ session.get('user_id') }})" readonly>
+                <input type="text" class="form-control form-control-sm bg-light" value="{{ session.get('user_name') }}" readonly>
             </div>
             <div class="mb-3">
                 <label for="board_create_title" class="form-label small fw-semibold">제목 *</label>
@@ -371,7 +371,7 @@
             }
             const p = data.post;
             document.getElementById("detail-post-title").textContent = p.title;
-            document.getElementById("detail-post-author").textContent = `${p.author_name} (${p.author_id})`;
+            document.getElementById("detail-post-author").textContent = p.author_name;
             document.getElementById("detail-post-updated").textContent = p.updated_at;
             document.getElementById("detail-post-content").textContent = p.content;
 

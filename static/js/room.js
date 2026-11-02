@@ -82,7 +82,7 @@ socket.on("disconnect", (reason) => {
 });
 
 socket.on("auth_error", (data) => {
-    alert(data.message || "세션이 만료되었거나 동일 IP에서 다른 계정이 접속 중입니다.");
+    alert(data.message || "세션이 만료되었습니다. 다시 로그인해주세요.");
     window.location.href = "/logout";
 });
 
@@ -139,14 +139,14 @@ socket.on("user_list_update", (data) => {
             const opt1 = document.createElement("option");
             opt1.value = u.user_id;
             opt1.dataset.userName = u.name;
-            opt1.textContent = `🔒 ${u.name} (${u.user_id})님에게만 전송`;
+            opt1.textContent = `🔒 ${u.name}님에게만 전송`;
             recipientSelect.appendChild(opt1);
 
             if (shareTargetSelect) {
                 const opt2 = document.createElement("option");
                 opt2.value = u.user_id;
                 opt2.dataset.userName = u.name;
-                opt2.textContent = `🔒 ${u.name} (${u.user_id})님에게만 화면 공유`;
+                opt2.textContent = `🔒 ${u.name}님에게만 화면 공유`;
                 shareTargetSelect.appendChild(opt2);
             }
         }
@@ -155,7 +155,6 @@ socket.on("user_list_update", (data) => {
             <div class="d-flex align-items-center gap-1 flex-wrap">
                 <span class="status-dot"></span>
                 <strong>${escapeHtml(u.name)}</strong>
-                <span class="text-secondary">(${escapeHtml(u.user_id)})</span>
                 ${badgeHtml}
                 ${sharingHtml}
             </div>
@@ -195,7 +194,7 @@ function onRecipientChange() {
         const selectedOpt = recipientSelect.options[recipientSelect.selectedIndex];
         const targetName = selectedOpt.dataset.userName || recipientSelect.value;
         indicator.classList.remove("hidden");
-        msgInput.placeholder = `🔒 [${targetName}(${recipientSelect.value})]님에게만 보낼 메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)`;
+        msgInput.placeholder = `🔒 [${targetName}]님에게만 보낼 메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)`;
     } else {
         indicator.classList.add("hidden");
         msgInput.placeholder = "메시지를 입력하세요... (Enter: 전송 / Shift+Enter: 줄바꿈)";
@@ -288,7 +287,7 @@ function appendMessageToDOM(msg) {
     row.className = `msg-row d-flex w-100 ${isMe ? "msg-mine justify-content-end" : "msg-other justify-content-start"} ${isWhisper ? "msg-whisper" : ""}`;
 
     const scopeBadge = isWhisper
-        ? `<span class="whisper-badge badge rounded-pill">🔒 귓속말 → ${escapeHtml(msg.target_user_name || msg.target_user_id)}</span>`
+        ? `<span class="whisper-badge badge rounded-pill">🔒 귓속말 → ${escapeHtml(msg.target_user_name || "상대방")}</span>`
         : `<span class="badge rounded-pill text-bg-light border text-secondary">전체</span>`;
 
     let bodyHtml = "";
@@ -320,7 +319,7 @@ function appendMessageToDOM(msg) {
     row.innerHTML = `
         <div class="msg-bubble p-2 px-3 rounded-3 border shadow-sm">
             <div class="d-flex align-items-center gap-2 mb-1 flex-wrap small">
-                <strong>${escapeHtml(msg.sender_name)} (${escapeHtml(msg.sender_id)})</strong>
+                <strong>${escapeHtml(msg.sender_name)}</strong>
                 ${scopeBadge}
                 <time class="text-secondary" style="font-size:0.72rem;">${escapeHtml(msg.created_at)}</time>
             </div>
@@ -439,7 +438,7 @@ socket.on("notice_updated", (data) => {
                     <div>
                         <strong>${escapeHtml(data.notice.content)}</strong>
                         <span class="badge text-bg-success ms-1">현재 공지</span>
-                        <div class="text-secondary">${escapeHtml(data.notice.author_name)} (${escapeHtml(data.notice.author_id)}) · ${escapeHtml(data.notice.created_at)}</div>
+                        <div class="text-secondary">${escapeHtml(data.notice.author_name)} · ${escapeHtml(data.notice.created_at)}</div>
                     </div>
                     <button type="button" class="btn btn-danger btn-sm py-0 px-2" onclick="deleteNoticeById(${data.notice.id})">삭제</button>
                 </li>
@@ -590,10 +589,10 @@ socket.on("screen_share_started", (info) => {
     const remoteImg = document.getElementById("remote-screen-img");
 
     const scopeText = info.target_user_id
-        ? `[1:1 공유 → ${info.target_user_name || info.target_user_id}]`
+        ? `[1:1 공유 → ${info.target_user_name || "상대방"}]`
         : `[전체 공유]`;
 
-    statusText.textContent = `${info.name}(${info.user_id})님의 Window 공유 중 ${scopeText} - 창: ${info.window_title}`;
+    statusText.textContent = `${info.name}님의 Window 공유 중 ${scopeText} - 창: ${info.window_title}`;
     panel.classList.remove("hidden");
 
     if (info.user_id !== CURRENT_USER_ID) {
@@ -673,7 +672,7 @@ function renderDbHistory(notices, messages) {
             html += `<tr>
                 <td>#${n.id}</td>
                 <td>${n.is_active ? '<span class="badge text-bg-success">활성</span>' : '<span class="badge text-bg-secondary">이전</span>'}</td>
-                <td>${escapeHtml(n.author_name)} (${escapeHtml(n.author_id)})</td>
+                <td>${escapeHtml(n.author_name)}</td>
                 <td>${escapeHtml(n.content)}</td>
                 <td>${escapeHtml(n.created_at)}</td>
             </tr>`;
@@ -688,12 +687,12 @@ function renderDbHistory(notices, messages) {
         let html = `<table class="table table-sm table-hover mb-0 small"><thead class="table-light sticky-top"><tr><th>ID</th><th>유형/대상</th><th>보낸사람</th><th>내용</th><th>저장 시각</th></tr></thead><tbody>`;
         messages.forEach((m) => {
             const targetLabel = m.target_user_id
-                ? `🔒 귓속말 → ${escapeHtml(m.target_user_name || m.target_user_id)}`
+                ? `🔒 귓속말 → ${escapeHtml(m.target_user_name || "상대방")}`
                 : `전체 (${escapeHtml(m.msg_type)})`;
             html += `<tr>
                 <td>#${m.id}</td>
                 <td>${targetLabel}</td>
-                <td>${escapeHtml(m.sender_name)} (${escapeHtml(m.sender_id)})</td>
+                <td>${escapeHtml(m.sender_name)}</td>
                 <td>${escapeHtml(m.content)}</td>
                 <td>${escapeHtml(m.created_at)}</td>
             </tr>`;
@@ -1012,7 +1011,7 @@ function renderSinglePollCard(poll, isClosed) {
                     <h4 class="h6 fw-bold mb-0">${escapeHtml(poll.title)}</h4>
                 </div>
                 <div class="text-end small">
-                    <div class="text-secondary" style="font-size: 0.74rem;">개설자: ${escapeHtml(poll.creator_name)} (${escapeHtml(poll.creator_id)})</div>
+                    <div class="text-secondary" style="font-size: 0.74rem;">개설자: ${escapeHtml(poll.creator_name)}</div>
                     <div class="fw-semibold ${isClosed ? "text-secondary" : "text-danger"} poll-deadline-timer"
                          data-poll-id="${poll.id}"
                          data-deadline="${escapeAttr(poll.deadline_iso)}"

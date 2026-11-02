@@ -80,7 +80,7 @@ class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(256), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True, default="")
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
@@ -88,18 +88,9 @@ class User(db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password: str) -> bool:
+        if not self.password_hash:
+            return True
         return check_password_hash(self.password_hash, password)
-
-
-class ActiveIPSession(db.Model):
-    """동일한 IP에서 1명의 user만 접속할 수 있도록 제어하는 테이블"""
-    __tablename__ = "active_ip_sessions"
-    id = db.Column(db.Integer, primary_key=True)
-    ip_address = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    user_id = db.Column(db.String(64), nullable=False)
-    user_name = db.Column(db.String(100), nullable=False)
-    session_token = db.Column(db.String(128), nullable=False)
-    last_active = db.Column(db.DateTime, default=datetime.now)
 
 
 class ChatRoom(db.Model):
@@ -447,13 +438,6 @@ def cleanup_expired_data():
         db.session.commit()
 
 
-def get_client_ip() -> str:
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.remote_addr or "127.0.0.1"
-
-
 def is_user_connected_via_socket(user_id: str) -> bool:
     for info in lobby_participants.values():
         if info.get("user_id") == user_id:
@@ -465,60 +449,6 @@ def is_user_connected_via_socket(user_id: str) -> bool:
     return False
 
 
-def logout_user_ip_session(user_id: str = None, ip_addr: str = None, session_token: str = None):
-    """특정 사용자 또는 IP의 활성 세션을 DB에서 제거(Logout)합니다."""
-    query = ActiveIPSession.query
-    if ip_addr:
-        query = query.filter_by(ip_address=ip_addr)
-    if user_id:
-        query = query.filter_by(user_id=user_id)
-    if session_token:
-        query = query.filter_by(session_token=session_token)
-    records = query.all()
-    if records:
-        for rec in records:
-            db.session.delete(rec)
-        db.session.commit()
-
-
-def cleanup_stale_ip_sessions(immediate_if_disconnected: bool = False):
-    """접속 해제되었거나 비활성화된 IP 세션을 즉시 또는 유예 시간 후 정리(Logout)합니다."""
-    all_records = ActiveIPSession.query.all()
-    now = datetime.now()
-    changed = False
-    for rec in all_records:
-        if is_user_connected_via_socket(rec.user_id):
-            continue
-        elapsed = (now - rec.last_active).total_seconds()
-        if immediate_if_disconnected or elapsed > DISCONNECT_GRACE_SECONDS:
-            db.session.delete(rec)
-            changed = True
-    if changed:
-        db.session.commit()
-
-
-def check_and_Touch_ip_session(ip_addr: str, user_id: str, session_token: str) -> tuple[bool, str]:
-    """
-    동일 IP에서 현재 로그인된 사용자가 유효한지 확인합니다.
-    다른 사용자가 해당 IP를 점유 중이면 (False, 사유)를 반환합니다.
-    """
-    if session.get("boot_id") != SERVER_BOOT_ID:
-        return False, "시스템이 재시작되어 세션이 초기화되었습니다. 다시 로그인해주세요."
-
-    cleanup_stale_ip_sessions()
-    ip_rec = ActiveIPSession.query.filter_by(ip_address=ip_addr).first()
-    if not ip_rec:
-        return False, "접속이 해제되어 로그아웃되었습니다. 다시 로그인해주세요."
-    if ip_rec.user_id != user_id or ip_rec.session_token != session_token:
-        return (
-            False,
-            f"동일 IP({ip_addr})에서 현재 '{ip_rec.user_name}({ip_rec.user_id})' 계정이 접속 중입니다. (1 IP당 1명만 접속 가능)",
-        )
-    ip_rec.last_active = datetime.now()
-    db.session.commit()
-    return True, ""
-
-
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -526,16 +456,8 @@ def login_required(f):
         session_token = session.get("session_token")
         if not user_id or not session_token or session.get("boot_id") != SERVER_BOOT_ID:
             session.clear()
-            flash("로그인이 필요합니다.", "warning")
+            flash("채팅방 입장이 필요합니다.", "warning")
             return redirect(url_for("login"))
-
-        ip_addr = get_client_ip()
-        ok, reason = check_and_Touch_ip_session(ip_addr, user_id, session_token)
-        if not ok:
-            session.clear()
-            flash(reason, "danger")
-            return redirect(url_for("login"))
-
         return f(*args, **kwargs)
 
     return decorated_function
@@ -547,175 +469,106 @@ def login_required(f):
 
 @app.route("/")
 def index():
-    """시스템 초기 접속 시 항상 메인(로그인) 화면부터 시작하도록 처리"""
-    ip_addr = get_client_ip()
-    user_id = session.get("user_id")
-    session_token = session.get("session_token")
-    if user_id and not is_user_connected_via_socket(user_id):
-        logout_user_ip_session(user_id=user_id, ip_addr=ip_addr, session_token=session_token)
-    session.clear()
+    if session.get("user_id") and session.get("boot_id") == SERVER_BOOT_ID:
+        return redirect(url_for("lobby"))
     return redirect(url_for("login"))
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    ip_addr = get_client_ip()
-    # 소켓 연결이 끊어진(접속 해제된) 기존 IP 세션은 즉시 로그아웃 처리
-    cleanup_stale_ip_sessions(immediate_if_disconnected=True)
-    existing_ip_session = ActiveIPSession.query.filter_by(ip_address=ip_addr).first()
+    saved_name = request.cookies.get("saved_name", "")
+
+    # 입장 가능한 채팅방 목록 구성
+    rooms = ChatRoom.query.order_by(ChatRoom.id.asc()).limit(MAX_ROOMS).all()
+    room_list = []
+    for r in rooms:
+        participants = room_participants.get(r.id, {})
+        unique_users = {info["user_id"]: info["name"] for info in participants.values()}
+        room_list.append({
+            "id": r.id,
+            "title": r.title,
+            "participant_count": len(unique_users),
+            "is_full": len(unique_users) >= MAX_ROOM_PARTICIPANTS,
+        })
 
     if request.method == "POST":
-        user_id = request.form.get("user_id", "").strip()
-        password = request.form.get("password", "")
-        remember_id = request.form.get("remember_id") == "on"
+        name = request.form.get("name", "").strip()
+        remember_name = request.form.get("remember_name") == "on"
+        target_room_id = request.form.get("target_room_id", "").strip()
 
-        if not user_id or not password:
-            flash("User ID와 Password를 모두 입력해주세요.", "danger")
+        if not name:
+            flash("이름(Name / 닉네임)을 입력해주세요.", "danger")
             return render_template(
                 "login.html",
-                client_ip=ip_addr,
-                existing_ip_session=existing_ip_session,
-                saved_user_id=user_id,
-                remember_id=remember_id,
+                saved_name=name,
+                remember_name=remember_name,
+                available_rooms=room_list,
             )
 
-        user = User.query.filter_by(user_id=user_id).first()
-        if not user or not user.check_password(password):
-            flash("존재하지 않는 User ID이거나 비밀번호가 일치하지 않습니다.", "danger")
+        if len(name) > 50:
+            flash("이름은 50자 이하로 입력해주세요.", "danger")
             return render_template(
                 "login.html",
-                client_ip=ip_addr,
-                existing_ip_session=existing_ip_session,
-                saved_user_id=user_id,
-                remember_id=remember_id,
+                saved_name=name,
+                remember_name=remember_name,
+                available_rooms=room_list,
             )
 
-        # 동일 IP 1인 접속 제한 확인
-        existing_ip_session = ActiveIPSession.query.filter_by(ip_address=ip_addr).first()
-        if existing_ip_session and existing_ip_session.user_id != user.user_id:
-            flash(
-                f"접속 제한: 동일한 IP({ip_addr})에서 이미 다른 사용자 "
-                f"'{existing_ip_session.user_name}({existing_ip_session.user_id})'님이 접속 중입니다. "
-                f"기존 사용자가 로그아웃한 후 접속할 수 있습니다.",
-                "danger",
-            )
-            return render_template(
-                "login.html",
-                client_ip=ip_addr,
-                existing_ip_session=existing_ip_session,
-                saved_user_id=user_id,
-                remember_id=remember_id,
-            )
-
+        # IP별 접속 제한 없음: 누구나 자유롭게 접속 가능
+        user_id = f"u_{uuid.uuid4().hex[:10]}"
         token = uuid.uuid4().hex
-        if existing_ip_session:
-            existing_ip_session.user_id = user.user_id
-            existing_ip_session.user_name = user.name
-            existing_ip_session.session_token = token
-            existing_ip_session.last_active = datetime.now()
-        else:
-            new_ip_session = ActiveIPSession(
-                ip_address=ip_addr,
-                user_id=user.user_id,
-                user_name=user.name,
-                session_token=token,
-                last_active=datetime.now(),
-            )
-            db.session.add(new_ip_session)
+
+        user = User(user_id=user_id, name=name, password_hash="")
+        db.session.add(user)
         db.session.commit()
 
-        session["user_id"] = user.user_id
-        session["user_name"] = user.name
+        session["user_id"] = user_id
+        session["user_name"] = name
         session["session_token"] = token
         session["boot_id"] = SERVER_BOOT_ID
 
-        resp = make_response(redirect(url_for("lobby")))
-        if remember_id:
-            resp.set_cookie("saved_user_id", user.user_id, max_age=60 * 60 * 24 * 30)
+        # 입장 대상 경로 결정 (특정 채팅방 또는 로비)
+        if target_room_id == "lobby":
+            target_url = url_for("lobby")
+        elif target_room_id.isdigit():
+            chosen_room = ChatRoom.query.get(int(target_room_id))
+            target_url = url_for("enter_room", room_id=chosen_room.id) if chosen_room else url_for("lobby")
         else:
-            resp.delete_cookie("saved_user_id")
+            default_r = ChatRoom.query.order_by(ChatRoom.id.asc()).first()
+            target_url = url_for("enter_room", room_id=default_r.id) if default_r else url_for("lobby")
 
-        flash(f"환영합니다, {user.name}({user.user_id})님!", "success")
+        resp = make_response(redirect(target_url))
+        if remember_name:
+            resp.set_cookie("saved_name", name, max_age=60 * 60 * 24 * 30)
+        else:
+            resp.delete_cookie("saved_name")
+
+        flash(f"환영합니다, {name}님!", "success")
         return resp
 
-    saved_user_id = request.cookies.get("saved_user_id", "")
     return render_template(
         "login.html",
-        client_ip=ip_addr,
-        existing_ip_session=existing_ip_session,
-        saved_user_id=saved_user_id,
-        remember_id=bool(saved_user_id),
+        saved_name=saved_name,
+        remember_name=bool(saved_name),
+        available_rooms=room_list,
     )
 
 
-@app.route("/register", methods=["POST"])
+@app.route("/register", methods=["GET", "POST"])
 def register():
-    ip_addr = get_client_ip()
-    user_id = request.form.get("user_id", "").strip()
-    password = request.form.get("password", "")
-    name = request.form.get("name", "").strip()
-
-    if not user_id or not password or not name:
-        flash("회원가입 시 User ID, Password, 이름을 모두 입력해야 합니다.", "danger")
-        return redirect(url_for("login", tab="register"))
-
-    if len(user_id) < 2 or len(user_id) > 50:
-        flash("User ID는 2자 이상 50자 이하로 입력해주세요.", "danger")
-        return redirect(url_for("login", tab="register"))
-
-    existing_user = User.query.filter_by(user_id=user_id).first()
-    if existing_user:
-        flash(f"이미 사용 중인 User ID('{user_id}')입니다. 다른 ID를 선택해주세요.", "danger")
-        return redirect(url_for("login", tab="register"))
-
-    new_user = User(user_id=user_id, name=name)
-    new_user.set_password(password)
-    db.session.add(new_user)
-    db.session.commit()
-
-    resp = make_response(redirect(url_for("login")))
-    resp.set_cookie("saved_user_id", user_id, max_age=60 * 60 * 24 * 30)
-    flash(f"회원가입이 완료되었습니다! '{user_id}' 계정으로 로그인해주세요.", "success")
-    return resp
+    return redirect(url_for("login"))
 
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
-    ip_addr = get_client_ip()
-    user_id = session.get("user_id")
-    session_token = session.get("session_token")
-
-    if user_id:
-        ip_rec = ActiveIPSession.query.filter_by(ip_address=ip_addr).first()
-        if ip_rec and (ip_rec.user_id == user_id or ip_rec.session_token == session_token):
-            db.session.delete(ip_rec)
-            db.session.commit()
-
     session.clear()
-    flash("정상적으로 로그아웃되었습니다.", "info")
+    flash("정상적으로 퇴장되었습니다.", "info")
     return redirect(url_for("login"))
 
 
-@app.route("/release-ip", methods=["POST"])
+@app.route("/release-ip", methods=["GET", "POST"])
 def release_ip():
-    """동일 IP에서 이전 브라우저 강제 종료 등으로 세션이 남아있을 때 비밀번호 확인 후 세션을 해제합니다."""
-    ip_addr = get_client_ip()
-    user_id = request.form.get("user_id", "").strip()
-    password = request.form.get("password", "")
-
-    ip_rec = ActiveIPSession.query.filter_by(ip_address=ip_addr).first()
-    if not ip_rec:
-        flash("현재 해당 IP에 점유된 세션이 없습니다.", "info")
-        return redirect(url_for("login"))
-
-    user = User.query.filter_by(user_id=ip_rec.user_id).first()
-    if user and user_id == user.user_id and user.check_password(password):
-        db.session.delete(ip_rec)
-        db.session.commit()
-        session.clear()
-        flash(f"IP({ip_addr})의 '{user.user_id}' 접속 세션이 해제되었습니다. 이제 로그인할 수 있습니다.", "success")
-    else:
-        flash("현재 점유 중인 계정의 User ID 또는 비밀번호가 일치하지 않아 해제할 수 없습니다.", "danger")
+    session.clear()
     return redirect(url_for("login"))
 
 
@@ -903,7 +756,7 @@ def lobby():
         room_list=room_list,
         max_rooms=MAX_ROOMS,
         max_participants=MAX_ROOM_PARTICIPANTS,
-        client_ip=get_client_ip(),
+        
         total_storage_bytes=total_storage,
         total_storage_label=format_file_size_limit(total_storage),
         max_storage_label=format_file_size_limit(MAX_TOTAL_STORAGE_BYTES),
@@ -1008,7 +861,7 @@ def enter_room(room_id: int):
         all_notices=all_notices,
         messages=messages,
         files=files,
-        client_ip=get_client_ip(),
+        
         max_upload_bytes=max_bytes,
         max_upload_label=format_file_size_limit(max_bytes),
         total_storage_bytes=total_storage,
@@ -1400,7 +1253,6 @@ def broadcast_user_list(room_id: int):
         users_by_id[uid] = {
             "user_id": uid,
             "name": info["name"],
-            "ip": info["ip"],
             "sharing": uid == sharer_user_id,
         }
 
@@ -1424,19 +1276,12 @@ def handle_join_lobby():
     user_name = session.get("user_name")
     session_token = session.get("session_token")
     if not user_id or not session_token or session.get("boot_id") != SERVER_BOOT_ID:
-        emit("auth_error", {"message": "로그인이 필요합니다."})
-        return
-
-    ip_addr = get_client_ip()
-    ok, reason = check_and_Touch_ip_session(ip_addr, user_id, session_token)
-    if not ok:
-        emit("auth_error", {"message": reason})
+        emit("auth_error", {"message": "채팅방 입장이 필요합니다."})
         return
 
     lobby_participants[request.sid] = {
         "user_id": user_id,
         "name": user_name,
-        "ip": ip_addr,
     }
 
 
@@ -1446,13 +1291,7 @@ def handle_join_chat_room(data):
     user_name = session.get("user_name")
     session_token = session.get("session_token")
     if not user_id or not session_token or session.get("boot_id") != SERVER_BOOT_ID:
-        emit("auth_error", {"message": "로그인이 필요합니다."})
-        return
-
-    ip_addr = get_client_ip()
-    ok, reason = check_and_Touch_ip_session(ip_addr, user_id, session_token)
-    if not ok:
-        emit("auth_error", {"message": reason})
+        emit("auth_error", {"message": "채팅방 입장이 필요합니다."})
         return
 
     room_id = int(data.get("room_id", 0))
@@ -1477,7 +1316,6 @@ def handle_join_chat_room(data):
     room_participants[room_id][request.sid] = {
         "user_id": user_id,
         "name": user_name,
-        "ip": ip_addr,
     }
 
     if not already_in_room:
@@ -1486,7 +1324,7 @@ def handle_join_chat_room(data):
             sender_id="SYSTEM",
             sender_name="시스템",
             msg_type="system",
-            content=f"{user_name}({user_id})님이 채팅방에 입장하셨습니다.",
+            content=f"{user_name}님이 채팅방에 입장하셨습니다.",
         )
         db.session.add(sys_msg)
         db.session.commit()
@@ -1726,7 +1564,7 @@ def handle_start_screen_share(data):
         target_user_id=target_user_id,
         target_user_name=target_user_name,
         msg_type="system",
-        content=f"🖥️ {user_name}({user_id})님이 윈도우 화면 공유를 시작했습니다 ({scope_desc} | 공유 창: {window_title})",
+        content=f"🖥️ {user_name}님이 윈도우 화면 공유를 시작했습니다 ({scope_desc} | 공유 창: {window_title})",
     )
     db.session.add(sys_msg)
     db.session.commit()
@@ -1804,7 +1642,7 @@ def handle_stop_screen_share(data):
             target_user_id=target_user_id,
             target_user_name=target_user_name,
             msg_type="system",
-            content=f"⏹️ {user_name}({user_id})님이 화면 공유를 취소(종료)했습니다.",
+            content=f"⏹️ {user_name}님이 화면 공유를 취소(종료)했습니다.",
         )
         db.session.add(sys_msg)
         db.session.commit()
@@ -1825,29 +1663,17 @@ def handle_stop_screen_share(data):
         broadcast_user_list(room_id)
 
 
-def _delayed_logout_if_disconnected(user_id: str, ip_addr: str):
-    socketio.sleep(DISCONNECT_GRACE_SECONDS)
-    with app.app_context():
-        if not is_user_connected_via_socket(user_id):
-            logout_user_ip_session(user_id=user_id, ip_addr=ip_addr)
-
-
 @socketio.on("disconnect")
 def handle_disconnect():
     sid = request.sid
-    disconnected_users = set()
-
     if sid in lobby_participants:
-        lobby_info = lobby_participants.pop(sid)
-        disconnected_users.add((lobby_info["user_id"], lobby_info["ip"]))
+        lobby_participants.pop(sid, None)
 
     for room_id, members in list(room_participants.items()):
         if sid in members:
             leaving_info = members.pop(sid)
             uid = leaving_info["user_id"]
             uname = leaving_info["name"]
-            uip = leaving_info["ip"]
-            disconnected_users.add((uid, uip))
             leave_room(f"room_{room_id}")
 
             # 해당 방에서 공유 중이던 소켓이 끊어졌으면 화면 공유 종료
@@ -1867,7 +1693,7 @@ def handle_disconnect():
                     sender_id="SYSTEM",
                     sender_name="시스템",
                     msg_type="system",
-                    content=f"{uname}({uid})님이 채팅방에서 퇴장하셨습니다.",
+                    content=f"{uname}님이 채팅방에서 퇴장하셨습니다.",
                 )
                 db.session.add(sys_msg)
                 db.session.commit()
@@ -1875,17 +1701,11 @@ def handle_disconnect():
 
             broadcast_user_list(room_id)
 
-    for uid, uip in disconnected_users:
-        if not is_user_connected_via_socket(uid):
-            socketio.start_background_task(_delayed_logout_if_disconnected, uid, uip)
-
 
 def init_db():
     with app.app_context():
         db.create_all()
-        # 시스템 시작/초기화 시 이전 접속 세션을 모두 해제(Logout)하여 항상 메인 화면부터 시작하도록 보장
-        ActiveIPSession.query.delete()
-        db.session.commit()
+
 
         # 48시간 지난 업로드 파일 및 채팅 메시지 삭제 (공지사항 제외)
         cleanup_expired_data()
